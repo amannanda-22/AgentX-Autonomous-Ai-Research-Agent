@@ -1,0 +1,491 @@
+{
+  "name": "AgentX Research Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agentx-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n8n-webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "agentx-research-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'received', task_id: $json.task_id }) }}",
+        "options": {}
+      },
+      "id": "n8n-respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 160]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-task-id",
+              "name": "task_id",
+              "value": "={{ $json.task_id }}",
+              "type": "string"
+            },
+            {
+              "id": "field-topic",
+              "name": "topic",
+              "value": "={{ $json.topic }}",
+              "type": "string"
+            },
+            {
+              "id": "field-email",
+              "name": "recipient_email",
+              "value": "={{ $json.email || 'default@example.com' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-status",
+              "name": "research_status",
+              "value": "={{ $json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "field-report",
+              "name": "report_snippet",
+              "value": "={{ $json.report_snippet || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-words",
+              "name": "word_count",
+              "value": "={{ $json.word_count || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "field-confidence",
+              "name": "avg_confidence",
+              "value": "={{ $json.avg_confidence || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "field-cost",
+              "name": "cost_usd",
+              "value": "={{ $json.cost_usd || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "field-attempts",
+              "name": "poll_attempts",
+              "value": "=0",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n8n-extract-params",
+      "name": "Extract Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-completed",
+              "leftValue": "={{ $json.research_status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n8n-check-completed",
+      "name": "Check if Completed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-failed",
+              "leftValue": "={{ $json.research_status }}",
+              "rightValue": "failed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n8n-check-failed",
+      "name": "Check if Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [920, 460]
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "n8n-wait-node",
+      "name": "Wait 30s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [920, 620],
+      "webhookId": "agentx-wait-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-increment",
+              "name": "poll_attempts",
+              "value": "={{ $json.poll_attempts + 1 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n8n-increment-counter",
+      "name": "Increment Counter",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1140, 620]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-max-polls",
+              "leftValue": "={{ $json.poll_attempts }}",
+              "rightValue": 20,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n8n-check-max-polls",
+      "name": "Max Polls Reached?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1360, 620]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://api:8000/research/' + $json.task_id }}",
+        "authentication": "none",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "n8n-poll-status",
+      "name": "Poll Research Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1360, 460]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-update-status",
+              "name": "research_status",
+              "value": "={{ $json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "field-update-report",
+              "name": "report_snippet",
+              "value": "={{ $json.result ? $json.result.report ? $json.result.report.substring(0, 800) : '' : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-update-words",
+              "name": "word_count",
+              "value": "={{ $json.result ? $json.result.word_count || 0 : 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "field-update-conf",
+              "name": "avg_confidence",
+              "value": "={{ $json.result ? $json.result.avg_confidence || 0 : 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "field-update-cost",
+              "name": "cost_usd",
+              "value": "={{ $json.cost ? $json.cost.usd_cost || 0 : 0 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n8n-update-status",
+      "name": "Update Status Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1580, 460]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Extract Parameters').item.json.recipient_email }}",
+        "subject": "=✅ AgentX Research Complete: {{ $('Extract Parameters').item.json.topic }}",
+        "emailType": "html",
+        "message": "=<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head>\n<body style='font-family:Inter,Arial,sans-serif;background:#0a0a0f;color:#e0e0f0;padding:40px 20px;max-width:680px;margin:0 auto'>\n<div style='background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.3);border-radius:16px;padding:32px'>\n<h1 style='color:#a78bfa;font-size:1.6rem;margin:0 0 8px'>🔬 AgentX Research Report</h1>\n<h2 style='color:#e0e0f0;font-size:1.2rem;font-weight:400;margin:0 0 24px'>{{ $('Extract Parameters').item.json.topic }}</h2>\n<div style='background:rgba(255,255,255,0.04);border-radius:12px;padding:20px;margin:16px 0'>\n<table style='width:100%;border-collapse:collapse'>\n<tr><td style='color:#6c7080;padding:6px 0;width:120px'>Words</td><td style='color:#a78bfa;font-weight:600'>{{ $('n8n-update-status').item.json.word_count }}</td></tr>\n<tr><td style='color:#6c7080;padding:6px 0'>Confidence</td><td style='color:#a78bfa;font-weight:600'>{{ Math.round($('n8n-update-status').item.json.avg_confidence * 100) }}%</td></tr>\n<tr><td style='color:#6c7080;padding:6px 0'>Cost</td><td style='color:#a78bfa;font-weight:600'>${{ $('n8n-update-status').item.json.cost_usd.toFixed(6) }}</td></tr>\n<tr><td style='color:#6c7080;padding:6px 0'>Task ID</td><td style='color:#4a4a6a;font-size:0.8rem'>{{ $('Extract Parameters').item.json.task_id }}</td></tr>\n</table>\n</div>\n<div style='background:rgba(255,255,255,0.03);border-left:3px solid #6c63ff;padding:16px 20px;border-radius:0 8px 8px 0;margin:16px 0'>\n<p style='color:#6c7080;font-size:0.8rem;margin:0 0 8px;text-transform:uppercase;letter-spacing:1px'>Report Preview</p>\n<p style='color:#c0c0e0;line-height:1.6;margin:0'>{{ $('n8n-update-status').item.json.report_snippet }}…</p>\n</div>\n<p style='color:#4a4a6a;font-size:0.8rem;margin-top:24px'>Full report available in your AgentX dashboard. This email was sent automatically by the AgentX n8n pipeline.</p>\n</div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "n8n-gmail-success",
+      "name": "Gmail: Send Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [920, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credential-id",
+          "name": "Gmail OAuth2 Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Extract Parameters').item.json.recipient_email }}",
+        "subject": "=❌ AgentX Research Failed: {{ $('Extract Parameters').item.json.topic }}",
+        "emailType": "html",
+        "message": "=<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'></head>\n<body style='font-family:Inter,Arial,sans-serif;background:#0a0a0f;color:#e0e0f0;padding:40px 20px;max-width:680px;margin:0 auto'>\n<div style='background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:32px'>\n<h1 style='color:#ef4444;font-size:1.5rem;margin:0 0 16px'>❌ Research Failed</h1>\n<p style='color:#c0c0e0'>Your AgentX research task on <strong>{{ $('Extract Parameters').item.json.topic }}</strong> encountered an error.</p>\n<div style='background:rgba(255,255,255,0.04);border-radius:8px;padding:16px;margin:16px 0'>\n<p style='color:#6c7080;margin:0 0 4px;font-size:0.8rem'>Task ID</p>\n<p style='color:#c0c0e0;margin:0'>{{ $('Extract Parameters').item.json.task_id }}</p>\n</div>\n<p style='color:#4a4a6a;font-size:0.8rem;margin-top:24px'>Please retry your research in the AgentX dashboard or contact support.</p>\n</div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "n8n-gmail-error",
+      "name": "Gmail: Send Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1140, 160],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credential-id",
+          "name": "Gmail OAuth2 Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Extract Parameters').item.json.recipient_email }}",
+        "subject": "=⏰ AgentX Research Timeout: {{ $('Extract Parameters').item.json.topic }}",
+        "emailType": "html",
+        "message": "=<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'></head>\n<body style='font-family:Inter,Arial,sans-serif;background:#0a0a0f;color:#e0e0f0;padding:40px 20px;max-width:680px;margin:0 auto'>\n<div style='background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:16px;padding:32px'>\n<h1 style='color:#f59e0b;font-size:1.5rem;margin:0 0 16px'>⏰ Research Timed Out</h1>\n<p style='color:#c0c0e0'>Your AgentX research task on <strong>{{ $('Extract Parameters').item.json.topic }}</strong> exceeded the maximum wait time (10 minutes).</p>\n<p style='color:#c0c0e0'>The research may still be running. Check the dashboard for status: <strong>{{ $('Extract Parameters').item.json.task_id }}</strong></p>\n<p style='color:#4a4a6a;font-size:0.8rem;margin-top:24px'>AgentX monitors tasks for up to 20 polling cycles × 30 seconds = 10 minutes.</p>\n</div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "n8n-gmail-timeout",
+      "name": "Gmail: Send Timeout Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1580, 620],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credential-id",
+          "name": "Gmail OAuth2 Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Parameters": {
+      "main": [
+        [
+          {
+            "node": "Check if Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Completed": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check if Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Failed": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 30s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30s": {
+      "main": [
+        [
+          {
+            "node": "Increment Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Counter": {
+      "main": [
+        [
+          {
+            "node": "Max Polls Reached?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Max Polls Reached?": {
+      "main": [
+        [
+          {
+            "node": "Poll Research Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail: Send Timeout Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Research Status": {
+      "main": [
+        [
+          {
+            "node": "Update Status Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status Fields": {
+      "main": [
+        [
+          {
+            "node": "Check if Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "agentx-v1-2026",
+  "id": "agentx-research-pipeline",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "agentx-instance"
+  },
+  "pinData": {},
+  "tags": [
+    {
+      "createdAt": "2026-06-23T00:00:00.000Z",
+      "updatedAt": "2026-06-23T00:00:00.000Z",
+      "id": "tag-agentx",
+      "name": "AgentX"
+    }
+  ]
+}

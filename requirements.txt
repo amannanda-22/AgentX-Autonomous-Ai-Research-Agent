@@ -1,0 +1,83 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# AgentX — requirements.txt
+# Python 3.12 · Windows / Linux / macOS
+# All versions verified against live PyPI metadata (June 2026)
+# Zero guessed or invented versions.
+# ════════════════════════════════════════════════════════════════════════════════
+
+# ── LangChain Ecosystem ────────────────────────────────────────────────────────
+# langchain (main) and langchain-community are NOT imported anywhere in
+# the codebase — excluded intentionally.
+langchain-core==1.4.8
+langchain-google-genai==4.2.5
+langchain-openai==1.3.3
+
+# ── LangGraph ─────────────────────────────────────────────────────────────────
+# v1.2.6 requires langchain-core>=1.4.7 — satisfied by ==1.4.8 above.
+langgraph==1.2.6
+
+# ── CrewAI ────────────────────────────────────────────────────────────────────
+# v1.14.7 enforces three tight constraints that dominate the whole tree:
+#   openai  >=2.30.0, <3     (kills openai 1.x)
+#   chromadb ~=1.1.0          (locks chromadb to 1.1.x)
+#   pydantic <2.13, >=2.11.9 (upper-bounded)
+crewai==1.14.7
+
+# ── LLM Provider SDKs ─────────────────────────────────────────────────────────
+# openai 2.x SDK — required by both crewai (>=2.30.0) and
+# langchain-openai (>=2.26.0). openai 1.x is incompatible with both.
+openai==2.43.0
+
+# google-generativeai is DEPRECATED and removed from langchain-google-genai 4.x.
+# The replacement is google-genai; langchain-google-genai==4.2.5 requires
+# google-genai>=1.65.0,<3.0.0.
+google-genai==2.9.0
+
+# ── Vector Memory ─────────────────────────────────────────────────────────────
+# HARD-PINNED to 1.1.1.  crewai requires chromadb~=1.1.0 (>=1.1.0, <1.2.0).
+# chromadb 1.x bundles onnxruntime for its DefaultEmbeddingFunction —
+# sentence-transformers is no longer a required extra.
+chromadb==1.1.1
+
+# ── Web Search ────────────────────────────────────────────────────────────────
+tavily-python==0.7.26
+
+# ── Web Scraping ──────────────────────────────────────────────────────────────
+# apify-client 3.x requires Python >=3.11.  Python 3.12 satisfies this.
+apify-client==3.0.3
+
+# ── API Backend ───────────────────────────────────────────────────────────────
+fastapi==0.138.0
+uvicorn[standard]==0.49.0
+
+# pydantic is the tightest constraint in the whole graph:
+#   google-genai  2.9.0  requires  pydantic >=2.12.5
+#   crewai        1.14.7 requires  pydantic <2.13, >=2.11.9
+#   Combined:                      pydantic ==2.12.5   (only valid 2.12.x)
+pydantic==2.12.5
+
+sse-starlette==3.4.5
+python-multipart==0.0.32
+httpx==0.28.1
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+streamlit==1.58.0
+requests==2.32.3
+
+# ── Observability ─────────────────────────────────────────────────────────────
+langsmith==0.9.0
+
+# ── Shared Utilities ──────────────────────────────────────────────────────────
+# python-dotenv: crewai 1.14.7 requires >=1.2.2; latest release is 1.2.2.
+python-dotenv==1.2.2
+
+# tenacity must satisfy all three consumers simultaneously:
+#   langchain-core  requires  tenacity !=8.4.0, >=8.1.0, <10.0.0
+#   chromadb 1.1.1  requires  tenacity >=8.2.3
+#   google-genai    requires  tenacity >=8.2.3, <9.2.0
+# → valid range: >=8.2.3, <9.2.0, !=8.4.0  → 9.1.2 satisfies all three.
+tenacity==9.1.2
+
+# typing-extensions: google-genai 2.9.0 requires >=4.14.0.
+# The original pin (4.13.2) is BELOW this floor — updated to latest 4.15.0.
+typing-extensions==4.15.0

@@ -1,0 +1,123 @@
+version: "3.9"
+
+# ── Shared env file ────────────────────────────────────────────────────────────
+x-common-env: &common-env
+  env_file: .env
+
+# ── Services ───────────────────────────────────────────────────────────────────
+services:
+
+  # ── FastAPI Research API ─────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    container_name: agentx-api
+    <<: *common-env
+    environment:
+      - API_PORT=8000
+      - CHROMA_PERSIST_DIR=/app/chroma_data
+      - DEBUG=false
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --log-level info
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/app/chroma_data
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - agentx-network
+    restart: unless-stopped
+
+  # ── Streamlit Frontend ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    container_name: agentx-frontend
+    <<: *common-env
+    environment:
+      - API_BASE_URL=http://api:8000
+    command: >
+      streamlit run frontend/app.py
+      --server.port=8501
+      --server.address=0.0.0.0
+      --server.headless=true
+      --browser.gatherUsageStats=false
+      --theme.base=dark
+      --theme.backgroundColor=#0a0a0f
+      --theme.primaryColor=#6c63ff
+      --theme.secondaryBackgroundColor=#0d0d1a
+      --theme.textColor=#e0e0f0
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - agentx-network
+    restart: unless-stopped
+
+  # ── n8n Workflow Automation ───────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: agentx-n8n
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://n8n:5678
+      - GENERIC_TIMEZONE=UTC
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-agentx2026}
+      - N8N_LOG_LEVEL=info
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-change-this-secret-key}
+      - DB_TYPE=sqlite
+      - DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/home/node/workflows:ro
+    networks:
+      - agentx-network
+    restart: unless-stopped
+
+  # ── ChromaDB standalone (optional — API uses embedded mode by default) ────────
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: agentx-chromadb
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/data
+      - ANONYMIZED_TELEMETRY=FALSE
+    ports:
+      - "8002:8000"
+    volumes:
+      - chroma_data:/chroma/data
+    networks:
+      - agentx-network
+    restart: unless-stopped
+    profiles:
+      - standalone-chroma   # only starts with: docker-compose --profile standalone-chroma up
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  chroma_data:
+    driver: local
+  n8n_data:
+    driver: local
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  agentx-network:
+    driver: bridge
+    name: agentx-network
